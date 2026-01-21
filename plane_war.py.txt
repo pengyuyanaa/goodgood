@@ -1,0 +1,191 @@
+# 飞机大战游戏 - 完整可运行版本
+# 作者：编程助手
+# 运行依赖：pygame库（pip install pygame）
+
+import pygame
+import sys
+import random
+import os
+
+# ===================== 初始化配置 =====================
+pygame.init()
+
+# 游戏常量定义
+SCREEN_WIDTH = 480
+SCREEN_HEIGHT = 700
+FPS = 60
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+YELLOW = (255, 255, 0)
+
+# 设置游戏窗口
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("飞机大战 - 简易版")
+clock = pygame.time.Clock()
+font = pygame.font.Font(None, 40)
+
+# ===================== 素材加载（无图片自动生成纯色图形） =====================
+def create_default_surface(width, height, color):
+    """创建纯色图形代替缺失的图片"""
+    surf = pygame.Surface((width, height), pygame.SRCALPHA)
+    surf.fill(color)
+    return surf
+
+# 玩家飞机（绿色）、敌机（红色）、子弹（黄色）
+PLAYER_IMG = create_default_surface(50, 60, GREEN)
+ENEMY_IMG = create_default_surface(50, 50, RED)
+BULLET_IMG = create_default_surface(10, 20, YELLOW)
+
+# ===================== 游戏精灵类 =====================
+class Player(pygame.sprite.Sprite):
+    """玩家飞机类：控制移动、发射子弹"""
+    def __init__(self):
+        super().__init__()
+        self.image = PLAYER_IMG
+        self.rect = self.image.get_rect()
+        self.rect.centerx = SCREEN_WIDTH // 2
+        self.rect.bottom = SCREEN_HEIGHT - 10
+        self.shoot_delay = 250  # 子弹发射间隔（毫秒）
+        self.last_shot = pygame.time.get_ticks()
+
+    def update(self):
+        """更新飞机位置（方向键控制）"""
+        keys = pygame.key.get_pressed()
+        # 左右移动
+        if keys[pygame.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= 8
+        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
+            self.rect.x += 8
+        # 上下移动
+        if keys[pygame.K_UP] and self.rect.top > 0:
+            self.rect.y -= 8
+        if keys[pygame.K_DOWN] and self.rect.bottom < SCREEN_HEIGHT:
+            self.rect.y += 8
+
+    def shoot(self):
+        """发射子弹（空格键触发）"""
+        now = pygame.time.get_ticks()
+        if now - self.last_shot > self.shoot_delay:
+            self.last_shot = now
+            bullet = Bullet(self.rect.centerx, self.rect.top)
+            all_sprites.add(bullet)
+            bullets.add(bullet)
+
+class Bullet(pygame.sprite.Sprite):
+    """子弹类：控制子弹移动和销毁"""
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = BULLET_IMG
+        self.rect = self.image.get_rect()
+        self.rect.centerx = x
+        self.rect.bottom = y
+        self.speed_y = -10  # 子弹向上飞行速度
+
+    def update(self):
+        self.rect.y += self.speed_y
+        # 超出屏幕顶部则删除
+        if self.rect.bottom < 0:
+            self.kill()
+
+class Enemy(pygame.sprite.Sprite):
+    """敌机类：随机生成、向下移动"""
+    def __init__(self):
+        super().__init__()
+        self.image = ENEMY_IMG
+        self.rect = self.image.get_rect()
+        # 随机生成位置（屏幕外上方）
+        self.rect.x = random.randint(0, SCREEN_WIDTH - self.rect.width)
+        self.rect.y = random.randint(-100, -40)
+        self.speed_y = random.randint(3, 6)  # 随机下落速度
+
+    def update(self):
+        self.rect.y += self.speed_y
+        # 超出屏幕底部则删除
+        if self.rect.top > SCREEN_HEIGHT:
+            self.kill()
+
+# ===================== 精灵组初始化 =====================
+all_sprites = pygame.sprite.Group()  # 所有精灵（用于统一更新/绘制）
+bullets = pygame.sprite.Group()      # 子弹精灵组（碰撞检测）
+enemies = pygame.sprite.Group()      # 敌机精灵组（碰撞检测）
+
+# 创建玩家飞机并加入精灵组
+player = Player()
+all_sprites.add(player)
+
+# ===================== 游戏变量 =====================
+score = 0          # 得分
+game_over = False  # 游戏结束标记
+enemy_spawn_timer = pygame.time.set_timer(pygame.USEREVENT + 1, 1000)  # 1秒生成1架敌机
+
+# ===================== 游戏主循环 =====================
+running = True
+while running:
+    # 控制帧率（60帧/秒）
+    clock.tick(FPS)
+
+    # 事件处理
+    for event in pygame.event.get():
+        # 关闭窗口
+        if event.type == pygame.QUIT:
+            running = False
+        # 空格键发射子弹
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE and not game_over:
+                player.shoot()
+            # 游戏结束后按R重新开始
+            if event.key == pygame.K_r and game_over:
+                game_over = False
+                score = 0
+                # 重置所有精灵组
+                all_sprites.empty()
+                bullets.empty()
+                enemies.empty()
+                player = Player()
+                all_sprites.add(player)
+        # 定时生成敌机
+        elif event.type == pygame.USEREVENT + 1 and not game_over:
+            enemy = Enemy()
+            all_sprites.add(enemy)
+            enemies.add(enemy)
+
+    # 游戏未结束时更新逻辑
+    if not game_over:
+        all_sprites.update()
+
+        # 子弹击中敌机检测（击中后加分）
+        hit_enemies = pygame.sprite.groupcollide(enemies, bullets, True, True)
+        for _ in hit_enemies:
+            score += 10
+            # 击中后随机生成新敌机（增加难度）
+            if random.random() > 0.3:
+                new_enemy = Enemy()
+                all_sprites.add(new_enemy)
+                enemies.add(new_enemy)
+
+        # 玩家撞敌机检测（撞机则游戏结束）
+        if pygame.sprite.spritecollide(player, enemies, True):
+            game_over = True
+
+    # ===================== 画面绘制 =====================
+    screen.fill(BLACK)  # 黑色背景
+    all_sprites.draw(screen)  # 绘制所有精灵
+
+    # 绘制得分
+    score_text = font.render(f"得分: {score}", True, WHITE)
+    screen.blit(score_text, (10, 10))
+
+    # 游戏结束提示
+    if game_over:
+        game_over_text = font.render("游戏结束! 按R重新开始", True, RED)
+        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+        screen.blit(game_over_text, text_rect)
+
+    # 更新屏幕显示
+    pygame.display.flip()
+
+# 退出游戏
+pygame.quit()
+sys.exit()
