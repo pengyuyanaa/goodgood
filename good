@@ -1,0 +1,128 @@
+import pygame
+import random
+import sys
+
+# 初始化
+pygame.init()
+screen = pygame.display.set_mode((480, 700))
+pygame.display.set_caption("飞机大战")
+clock = pygame.time.Clock()
+
+# 颜色定义
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+
+# 玩家飞机
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((50, 40))
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect()
+        self.rect.centerx = 240
+        self.rect.bottom = 680
+        self.speed = 8
+
+    def update(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.rect.right < 480:
+            self.rect.x += self.speed
+        if keys[pygame.K_UP] and self.rect.top > 0:
+            self.rect.y -= self.speed
+        if keys[pygame.K_DOWN] and self.rect.bottom < 700:
+            self.rect.y += self.speed
+
+    def shoot(self):
+        bullet = Bullet(self.rect.centerx, self.rect.top)
+        all_sprites.add(bullet)
+        bullets.add(bullet)
+
+# 敌机
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((40, 30))
+        self.image.fill(RED)
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randint(0, 440)
+        self.rect.y = random.randint(-100, -40)
+        self.speed = random.randint(3, 6)
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > 700:
+            self.rect.x = random.randint(0, 440)
+            self.rect.y = random.randint(-100, -40)
+
+# 子弹
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((5, 15))
+        self.image.fill(WHITE)
+        self.rect = self.image.get_rect()
+        self.rect.centerx = x
+        self.rect.bottom = y
+        self.speed = 10
+
+    def update(self):
+        self.rect.y -= self.speed
+        if self.rect.bottom < 0:
+            self.kill()
+
+# 精灵组
+all_sprites = pygame.sprite.Group()
+enemies = pygame.sprite.Group()
+bullets = pygame.sprite.Group()
+
+player = Player()
+all_sprites.add(player)
+
+# 生成敌机
+for _ in range(8):
+    e = Enemy()
+    all_sprites.add(e)
+    enemies.add(e)
+
+score = 0
+font = pygame.font.SysFont(None, 40)
+
+# 主循环
+running = True
+while running:
+    clock.tick(60)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                player.shoot()
+
+    all_sprites.update()
+
+    # 子弹击中敌机
+    hits = pygame.sprite.groupcollide(enemies, bullets, True, True)
+    for hit in hits:
+        score += 10
+        e = Enemy()
+        all_sprites.add(e)
+        enemies.add(e)
+
+    # 敌机撞玩家
+    if pygame.sprite.spritecollide(player, enemies, True):
+        running = False
+
+    # 绘制
+    screen.fill(BLACK)
+    all_sprites.draw(screen)
+    text = font.render(f"Score: {score}", True, WHITE)
+    screen.blit(text, (10, 10))
+    pygame.display.flip()
+
+pygame.quit()
+sys.exit()
